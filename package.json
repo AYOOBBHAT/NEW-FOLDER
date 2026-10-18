@@ -1,0 +1,37 @@
+{
+  "name": "shawl-house",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "seed": "tsx scripts/seed.ts",
+    "test": "tsx --test tests/catalogue-params.test.ts tests/validators.test.ts tests/catalogue-query.test.ts tests/persistence.test.ts tests/checkout.test.ts",
+    "check:db": "tsx scripts/check-atlas.ts",
+    "check:images": "tsx scripts/check-cloudinary.ts",
+    "dev:memory": "tsx scripts/dev-memory.ts"
+  },
+  "dependencies": {
+    "cloudinary": "^2.11.0",
+    "jose": "^6.2.12",
+    "mongodb": "^7.7.0",
+    "mongoose": "^9.11.2",
+    "next": "^16.4.1",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/node": "^26.6.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^16.4.1",
+    "mongodb-memory-server": "^11.3.0",
+    "postcss": "^8.5.30",
+    "tailwindcss": "^4.3.3",
+    "tsx": "^4.23.0",
+    "typescript": "^6.0.3"
+  }
+}
