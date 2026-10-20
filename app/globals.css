@@ -92,6 +92,17 @@ h1, h2, h3, .serif { font-family: var(--serif); font-weight: 460; letter-spacing
 .footer-grid h2 { margin: 0 0 0.7rem; font-size: 1.2rem; }
 .footer-grid a, .footer-grid p { display: block; color: var(--muted); margin: 0.35rem 0; }
 .footer-note { margin-top: 2rem; color: var(--muted); font-size: 0.9rem; }
+.legal { padding: 2.6rem 0 1rem; }
+.legal-doc { max-width: 44rem; }
+.legal-doc h1 { font-size: clamp(2.4rem, 5vw, 4.2rem); line-height: 0.95; margin: 0 0 0.8rem; }
+.legal-doc h2 { font-size: clamp(1.35rem, 2vw, 1.7rem); margin: 2rem 0 0.55rem; }
+.legal-doc p, .legal-doc li { margin: 0.55rem 0; }
+.legal-doc ul { margin: 0.4rem 0 0; padding-left: 1.15rem; }
+.legal-doc a { color: var(--burgundy-dark); border-bottom: 1px solid var(--line); }
+.legal-draft { background: #f6e7dc; padding: 0.95rem 1rem; margin-top: 1.3rem; }
+.legal-draft strong { display: block; margin-bottom: 0.3rem; }
+.legal-draft p { margin: 0; }
+.legal-gap { background: var(--chip); padding: 0.05rem 0.3rem; }
 
 .hero { padding: 4.5rem 0 2rem; }
 .hero h1 { font-size: clamp(3.3rem, 8vw, 6.6rem); line-height: 0.9; margin: 0; max-width: 11ch; }
@@ -280,10 +291,13 @@ th { font-size: 0.75rem; letter-spacing: 0.12em; text-transform: uppercase; colo
 @media (min-width: 760px) {
   .taxon-grid { grid-template-columns: repeat(3, 1fr); }
   .footer-grid { grid-template-columns: 1.4fr 1fr 1fr 1fr; }
+  .footer-policies { grid-column: 1 / -1; }
   .product-page { grid-template-columns: 1.05fr 0.95fr; align-items: start; }
   .stats { grid-template-columns: repeat(4, 1fr); }
 }
 @media (min-width: 960px) {
+  .footer-grid { grid-template-columns: 1.35fr repeat(4, minmax(8rem, 1fr)); }
+  .footer-policies { grid-column: auto; }
   .menu-button { display: none; }
   .catalogue-layout { display: grid; grid-template-columns: 250px 1fr; gap: 2rem; align-items: start; }
   .catalogue-sidebar {

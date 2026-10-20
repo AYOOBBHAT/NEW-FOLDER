@@ -30,6 +30,10 @@ export function SiteFooter({ categories, collections }: { categories: NavItem[];
             </Link>
           ))}
         </div>
+        <div className="footer-policies">
+          <h2>Policies</h2>
+          <Link href="/terms-and-conditions">Terms & Conditions</Link>
+        </div>
       </div>
       <div className="wrap footer-note">Each piece lists fibre, craft, and origin only when those details have been verified.</div>
     </footer>
