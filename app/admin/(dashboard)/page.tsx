@@ -37,6 +37,6 @@ export default async function AdminHomePage() {
       </>
     );
   } catch (error) {
-    return adminDatabaseNotice(error);
+    return await adminDatabaseNotice(error);
   }
 }

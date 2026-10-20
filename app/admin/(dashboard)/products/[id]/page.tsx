@@ -48,6 +48,6 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
     );
   } catch (error) {
     if (error instanceof InputError && error.status === 404) notFound();
-    return adminDatabaseNotice(error);
+    return await adminDatabaseNotice(error);
   }
 }

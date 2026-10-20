@@ -31,6 +31,6 @@ export default async function EditCollectionPage({ params }: { params: Promise<{
     );
   } catch (error) {
     if (error instanceof InputError && error.status === 404) notFound();
-    return adminDatabaseNotice(error);
+    return await adminDatabaseNotice(error);
   }
 }

@@ -46,6 +46,6 @@ export async function TaxonList({ kind }: { kind: TaxonKind }) {
       </>
     );
   } catch (error) {
-    return adminDatabaseNotice(error);
+    return await adminDatabaseNotice(error);
   }
 }

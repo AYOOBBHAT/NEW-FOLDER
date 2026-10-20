@@ -72,6 +72,6 @@ export default async function ProductsPage({
       </>
     );
   } catch (error) {
-    return adminDatabaseNotice(error);
+    return await adminDatabaseNotice(error);
   }
 }

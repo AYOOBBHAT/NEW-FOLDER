@@ -65,6 +65,6 @@ export default async function AdminOrdersPage() {
       </>
     );
   } catch (error) {
-    return adminDatabaseNotice(error);
+    return await adminDatabaseNotice(error);
   }
 }

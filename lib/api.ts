@@ -3,7 +3,7 @@ import type { Db } from "mongodb";
 import { getAdminSession } from "@/lib/current-admin";
 import { InputError } from "@/lib/errors";
 import { isSameOrigin } from "@/lib/origin";
-import { getDb, logDatabaseFailure } from "@/lib/mongodb";
+import { getDb, logDatabaseFailure, safeRequestId } from "@/lib/mongodb";
 
 export function json(data: unknown, status = 200, cookie?: { name: string; value: string; options: Parameters<NextResponse["cookies"]["set"]>[2] }) {
   const response = NextResponse.json(data, {
@@ -38,7 +38,7 @@ export async function withShop(request: Request, handler: (db: Db) => Promise<Ne
     return await handler(await getDb());
   } catch (error) {
     if (error instanceof InputError) return json({ error: error.message }, error.status);
-    logDatabaseFailure(error);
+    logDatabaseFailure(error, safeRequestId(request.headers.get("x-vercel-id")));
     return json({ error: "Something went wrong" }, 500);
   }
 }
@@ -55,7 +55,7 @@ export async function withAdmin(request: Request, handler: (db: Db) => Promise<N
   } catch (error) {
     if (error instanceof InputError) return json({ error: error.message }, error.status);
     if (isDuplicateKey(error)) return json({ error: "That address or SKU is already in use" }, 409);
-    logDatabaseFailure(error);
+    logDatabaseFailure(error, safeRequestId(request.headers.get("x-vercel-id")));
     return json({ error: "Something went wrong" }, 500);
   }
 }

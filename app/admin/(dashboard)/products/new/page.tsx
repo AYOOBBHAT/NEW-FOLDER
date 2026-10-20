@@ -14,6 +14,6 @@ export default async function NewProductPage() {
       </>
     );
   } catch (error) {
-    return adminDatabaseNotice(error);
+    return await adminDatabaseNotice(error);
   }
 }

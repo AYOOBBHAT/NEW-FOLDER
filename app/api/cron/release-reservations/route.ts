@@ -8,7 +8,7 @@
 import { json } from "@/lib/api";
 import { releaseExpiredReservations } from "@/lib/checkout";
 import { cronRequestAuthorized } from "@/lib/cron-auth";
-import { getDb, logDatabaseFailure } from "@/lib/mongodb";
+import { getDb, logDatabaseFailure, safeRequestId } from "@/lib/mongodb";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,7 +21,7 @@ export async function GET(request: Request) {
     const result = await releaseExpiredReservations(await getDb());
     return json(result);
   } catch (error) {
-    logDatabaseFailure(error);
+    logDatabaseFailure(error, safeRequestId(request.headers.get("x-vercel-id")));
     return json({ error: "Reservation release failed" }, 500);
   }
 }
