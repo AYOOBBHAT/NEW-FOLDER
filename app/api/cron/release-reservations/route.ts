@@ -1,7 +1,9 @@
 /**
- * Production must set the server-only variable CRON_SECRET to a random value of at least 16 characters.
- * Vercel Cron sends it as Authorization: Bearer <CRON_SECRET>. This route rejects any other request.
- * Never log the header or the secret, and do not prefix the variable with NEXT_PUBLIC_.
+ * Protected expiry endpoint for an external scheduler. There is no Vercel Cron.
+ * Hobby only allows a daily cron, which does not meet the 30-minute unpaid stock hold, so none is registered.
+ * Checkout also releases holds whose stored expiry has passed. That fallback does not guarantee release exactly 30 minutes after checkout; stock can stay reserved until the next checkout or a call to this route.
+ * A caller must send Authorization: Bearer <CRON_SECRET>. CRON_SECRET is server-only, at least 16 characters, and must not use a NEXT_PUBLIC_ name.
+ * Never log the header or the secret.
  */
 import { json } from "@/lib/api";
 import { releaseExpiredReservations } from "@/lib/checkout";

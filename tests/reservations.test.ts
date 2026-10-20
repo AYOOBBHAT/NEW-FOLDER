@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { createHmac } from "node:crypto";
 import { after, before, describe, it } from "node:test";
 import { MongoClient, ObjectId, type Db } from "mongodb";
@@ -178,7 +178,7 @@ describe("scheduled reservation expiry", { timeout: 180_000, concurrency: 1 }, (
     }
   });
 
-  it("lets checkout expiry and the scheduled job restore the same hold once", async () => {
+  it("lets checkout release an expired hold once, including when cleanup runs again", async () => {
     const expiredProduct = await insertPiece(db, "fallback-expired", 9000);
     const nextProduct = await insertPiece(db, "fallback-next", 9100);
     const expired = await holdOrder(db, expiredProduct.id, 9000, "idem-fallback-expired");
@@ -194,11 +194,8 @@ describe("scheduled reservation expiry", { timeout: 180_000, concurrency: 1 }, (
 });
 
 describe("reservation cron endpoint", () => {
-  it("schedules the release path every 5 minutes", () => {
-    const config = JSON.parse(readFileSync(new URL("../vercel.json", import.meta.url), "utf8")) as {
-      crons: { path: string; schedule: string }[];
-    };
-    assert.deepEqual(config.crons, [{ path: "/api/cron/release-reservations", schedule: "*/5 * * * *" }]);
+  it("does not register a Vercel Cron schedule", () => {
+    assert.equal(existsSync(new URL("../vercel.json", import.meta.url)), false);
   });
 
   it("rejects a request that does not present the server secret", async () => {

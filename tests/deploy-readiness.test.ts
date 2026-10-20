@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import robots from "@/app/robots";
 import sitemap from "@/app/sitemap";
@@ -43,11 +43,8 @@ describe("deploy readiness", () => {
     );
   });
 
-  it("schedules the reservation route without logging the secret", () => {
-    const config = JSON.parse(readFileSync(new URL("../vercel.json", import.meta.url), "utf8")) as {
-      crons: { path: string; schedule: string }[];
-    };
-    assert.deepEqual(config.crons, [{ path: "/api/cron/release-reservations", schedule: "*/5 * * * *" }]);
+  it("keeps the expiry route protected and does not register a Vercel Cron", () => {
+    assert.equal(existsSync(new URL("../vercel.json", import.meta.url)), false);
     const route = readFileSync(new URL("../app/api/cron/release-reservations/route.ts", import.meta.url), "utf8");
     const auth = readFileSync(new URL("../lib/cron-auth.ts", import.meta.url), "utf8");
     assert.equal(route.includes("console."), false);
