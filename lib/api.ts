@@ -3,7 +3,7 @@ import type { Db } from "mongodb";
 import { getAdminSession } from "@/lib/current-admin";
 import { InputError } from "@/lib/errors";
 import { isSameOrigin } from "@/lib/origin";
-import { getDb } from "@/lib/mongodb";
+import { getDb, logDatabaseFailure } from "@/lib/mongodb";
 
 export function json(data: unknown, status = 200, cookie?: { name: string; value: string; options: Parameters<NextResponse["cookies"]["set"]>[2] }) {
   const response = NextResponse.json(data, {
@@ -30,14 +30,6 @@ function isDuplicateKey(error: unknown) {
   return typeof error === "object" && error !== null && "code" in error && (error as { code?: number }).code === 11000;
 }
 
-function safeErrorCode(error: unknown) {
-  if (typeof error === "object" && error !== null && "codeName" in error) {
-    const codeName = (error as { codeName?: unknown }).codeName;
-    if (typeof codeName === "string" && /^[A-Za-z0-9]+$/.test(codeName)) return `Database request failed: ${codeName}`;
-  }
-  return "Request failed";
-}
-
 export async function withShop(request: Request, handler: (db: Db) => Promise<NextResponse>) {
   if (request.method !== "GET" && request.method !== "HEAD" && !isSameOrigin(request)) {
     return json({ error: "Invalid origin" }, 403);
@@ -46,7 +38,7 @@ export async function withShop(request: Request, handler: (db: Db) => Promise<Ne
     return await handler(await getDb());
   } catch (error) {
     if (error instanceof InputError) return json({ error: error.message }, error.status);
-    console.error(safeErrorCode(error));
+    logDatabaseFailure(error);
     return json({ error: "Something went wrong" }, 500);
   }
 }
@@ -63,7 +55,7 @@ export async function withAdmin(request: Request, handler: (db: Db) => Promise<N
   } catch (error) {
     if (error instanceof InputError) return json({ error: error.message }, error.status);
     if (isDuplicateKey(error)) return json({ error: "That address or SKU is already in use" }, 409);
-    console.error(safeErrorCode(error));
+    logDatabaseFailure(error);
     return json({ error: "Something went wrong" }, 500);
   }
 }

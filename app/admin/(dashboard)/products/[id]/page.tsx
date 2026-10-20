@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { adminDatabaseNotice } from "@/components/admin/database-notice";
 import { ProductForm, type ProductFormValues } from "@/components/admin/product-form";
 import { getProduct, taxonChoices } from "@/lib/catalog-admin";
 import { InputError } from "@/lib/errors";
@@ -47,6 +48,6 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
     );
   } catch (error) {
     if (error instanceof InputError && error.status === 404) notFound();
-    return <p>The database is not connected. Set MONGODB_URI and restart.</p>;
+    return adminDatabaseNotice(error);
   }
 }

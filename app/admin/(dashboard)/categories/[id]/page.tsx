@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { adminDatabaseNotice } from "@/components/admin/database-notice";
 import { MembershipEditor } from "@/components/admin/membership-editor";
 import { TaxonomyForm } from "@/components/admin/taxonomy-form";
 import { assignedProducts, getTaxon } from "@/lib/catalog-admin";
@@ -30,6 +31,6 @@ export default async function EditCategoryPage({ params }: { params: Promise<{ i
     );
   } catch (error) {
     if (error instanceof InputError && error.status === 404) notFound();
-    return <p>The database is not connected. Set MONGODB_URI and restart.</p>;
+    return adminDatabaseNotice(error);
   }
 }

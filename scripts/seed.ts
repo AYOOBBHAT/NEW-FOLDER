@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { MongoClient } from "mongodb";
-import { prepareDatabase } from "../lib/mongodb";
+import { logDatabaseFailure, prepareDatabase } from "../lib/mongodb";
 import { markTaxonomySeeded, seedTaxonomy } from "../lib/seed";
 
 function loadEnv(file: string) {
@@ -40,6 +40,6 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error(error);
+  logDatabaseFailure(error);
   process.exit(1);
 });

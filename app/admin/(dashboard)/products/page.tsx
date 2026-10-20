@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { adminDatabaseNotice } from "@/components/admin/database-notice";
 import { listAdminProducts } from "@/lib/catalog-admin";
 import { formatPrice } from "@/lib/format";
 import { getDb } from "@/lib/mongodb";
@@ -70,7 +71,7 @@ export default async function ProductsPage({
         ) : null}
       </>
     );
-  } catch {
-    return <p>The database is not connected. Set MONGODB_URI and restart.</p>;
+  } catch (error) {
+    return adminDatabaseNotice(error);
   }
 }

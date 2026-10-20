@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { adminDatabaseNotice } from "@/components/admin/database-notice";
 import { listTaxons, type TaxonKind } from "@/lib/catalog-admin";
 import { getDb } from "@/lib/mongodb";
 
@@ -44,7 +45,7 @@ export async function TaxonList({ kind }: { kind: TaxonKind }) {
         </div>
       </>
     );
-  } catch {
-    return <p>The database is not connected. Set MONGODB_URI and restart.</p>;
+  } catch (error) {
+    return adminDatabaseNotice(error);
   }
 }

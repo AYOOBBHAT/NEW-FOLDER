@@ -6,7 +6,7 @@
 import { json } from "@/lib/api";
 import { releaseExpiredReservations } from "@/lib/checkout";
 import { cronRequestAuthorized } from "@/lib/cron-auth";
-import { getDb } from "@/lib/mongodb";
+import { getDb, logDatabaseFailure } from "@/lib/mongodb";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,7 +18,8 @@ export async function GET(request: Request) {
   try {
     const result = await releaseExpiredReservations(await getDb());
     return json(result);
-  } catch {
+  } catch (error) {
+    logDatabaseFailure(error);
     return json({ error: "Reservation release failed" }, 500);
   }
 }

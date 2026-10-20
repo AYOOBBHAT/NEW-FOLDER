@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { adminDatabaseNotice } from "@/components/admin/database-notice";
 import { getDb } from "@/lib/mongodb";
 
 export default async function AdminHomePage() {
@@ -35,7 +36,7 @@ export default async function AdminHomePage() {
         </p>
       </>
     );
-  } catch {
-    return <p>The database is not connected. Set MONGODB_URI and restart.</p>;
+  } catch (error) {
+    return adminDatabaseNotice(error);
   }
 }

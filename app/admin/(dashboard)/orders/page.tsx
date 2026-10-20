@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { adminDatabaseNotice } from "@/components/admin/database-notice";
 import { FulfillOrder } from "@/components/admin/fulfill-order";
 import { formatPrice } from "@/lib/format";
 import { getDb } from "@/lib/mongodb";
@@ -63,7 +64,7 @@ export default async function AdminOrdersPage() {
         </p>
       </>
     );
-  } catch {
-    return <p>The database is not connected. Set MONGODB_URI and restart.</p>;
+  } catch (error) {
+    return adminDatabaseNotice(error);
   }
 }

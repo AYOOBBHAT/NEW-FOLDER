@@ -1,3 +1,4 @@
+import { adminDatabaseNotice } from "@/components/admin/database-notice";
 import { ProductForm } from "@/components/admin/product-form";
 import { taxonChoices } from "@/lib/catalog-admin";
 import { getDb } from "@/lib/mongodb";
@@ -12,7 +13,7 @@ export default async function NewProductPage() {
         <ProductForm categories={choices.categories} collections={choices.collections} />
       </>
     );
-  } catch {
-    return <p>The database is not connected. Set MONGODB_URI and restart.</p>;
+  } catch (error) {
+    return adminDatabaseNotice(error);
   }
 }
