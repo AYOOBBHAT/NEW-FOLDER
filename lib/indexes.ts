@@ -58,4 +58,8 @@ export async function ensureIndexes(db: Db) {
   await db.collection("paymentEvents").createIndexes([
     { key: { provider: 1, eventId: 1 }, unique: true, name: "payment_events_id" },
   ]);
+
+  await db.collection("paymentReconciliations").createIndexes([
+    { key: { provider: 1, razorpayOrderId: 1, paymentId: 1 }, unique: true, name: "payment_reconcile_capture" },
+  ]);
 }

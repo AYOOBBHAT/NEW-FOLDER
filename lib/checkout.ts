@@ -4,7 +4,13 @@ import { assertStoredOrder } from "@/lib/models";
 import { InputError } from "@/lib/errors";
 import { hashGuestToken } from "@/lib/guest";
 import { amountPaise, lineTotal, RESERVATION_MINUTES, summarize } from "@/lib/money";
-import { assertOrderTransition, assertPaidTransition, assertPaymentTransition, type OrderStatus, type PaymentStatus } from "@/lib/order-status";
+import {
+  assertOrderTransition,
+  assertPaymentTransition,
+  type OrderStatus,
+  type PaymentStatus,
+  type ReconciliationReason,
+} from "@/lib/order-status";
 import { createRazorpayOrder, isVerifiedPayment, razorpayStatus, type VerifiedPayment } from "@/lib/razorpay";
 import { CURRENCY, type ProductDoc } from "@/lib/types";
 import type { CheckoutInput } from "@/lib/checkout-input";
@@ -44,6 +50,12 @@ export type OrderDoc = {
   reservationExpiresAt: Date | null;
   razorpayOrderId: string | null;
   razorpayPaymentId: string | null;
+  reconciliation: {
+    reason: ReconciliationReason;
+    paymentId: string;
+    amountPaise: number;
+    recordedAt: Date;
+  } | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -95,6 +107,7 @@ export async function placeOrder(db: Db, token: string, input: CheckoutInput) {
       reservationExpiresAt: new Date(now.getTime() + RESERVATION_MINUTES * 60 * 1000),
       razorpayOrderId: null,
       razorpayPaymentId: null,
+      reconciliation: null,
       createdAt: now,
       updatedAt: now,
     };
@@ -133,6 +146,7 @@ export async function startPayment(db: Db, token: string, number: string) {
   const order = await orderForGuest(db, token, number);
   if (!order) throw new InputError("Order not found", 404);
   if (order.paymentStatus === "paid") return { order, keyId: status.keyId, reused: true };
+  if (order.paymentStatus === "review" || order.reconciliation) throw new InputError("This payment is waiting for review");
   if (order.status !== "pending_payment") throw new InputError("This order is not awaiting payment");
   if (order.reservationExpiresAt && order.reservationExpiresAt.getTime() <= Date.now()) {
     await releaseReservation(db, order._id, "failed");
@@ -162,51 +176,39 @@ export async function startPayment(db: Db, token: string, number: string) {
 
 export async function applyVerifiedPayment(db: Db, guestTokenHash: string | null, payment: VerifiedPayment) {
   if (!isVerifiedPayment(payment)) throw new InputError("Payment was not verified");
-  const recorded = await recordPaymentEvent(db, payment.eventId, payment.razorpayOrderId);
-  if (recorded === "duplicate") {
-    const existing = await db.collection<OrderDoc>("orders").findOne({ razorpayOrderId: payment.razorpayOrderId });
-    if (!existing) throw new InputError("Order not found", 404);
-    if (guestTokenHash && existing.guestTokenHash !== guestTokenHash) throw new InputError("Order not found", 404);
-    return existing;
-  }
+  await recordPaymentEvent(db, payment.eventId, payment.razorpayOrderId);
   const order = await db.collection<OrderDoc>("orders").findOne({ razorpayOrderId: payment.razorpayOrderId });
-  if (!order) throw new InputError("Order not found", 404);
+  if (!order) {
+    await recordUnmatchedCapture(db, payment);
+    return null;
+  }
   if (guestTokenHash && order.guestTokenHash !== guestTokenHash) throw new InputError("Order not found", 404);
-  if (amountPaise(order.total) !== payment.amountPaise) throw new InputError("The payment amount does not match this order");
-  if (order.paymentStatus === "paid") {
+  if (amountPaise(order.total) !== payment.amountPaise) {
+    if (order.status === "pending_payment" && !order.stockReleaseDue && order.paymentStatus !== "review") {
+      await releaseReservation(db, order._id, "failed");
+    }
+    return flagReconciliation(db, order, payment, "amount_mismatch");
+  }
+  if (order.paymentStatus === "paid" || order.status === "confirmed" || order.status === "fulfilled") {
     if (order.razorpayPaymentId === payment.paymentId) return order;
-    throw new InputError("Payment was not verified");
+    return flagReconciliation(db, order, payment, "conflicting_payment");
   }
-  assertPaidTransition(order.paymentStatus);
-  assertOrderTransition(order.status, "confirmed");
-  const now = new Date();
-  const updated = await db.collection<OrderDoc>("orders").findOneAndUpdate(
-    { _id: order._id, paymentStatus: order.paymentStatus, status: order.status },
-    {
-      $set: {
-        paymentStatus: "paid",
-        status: "confirmed",
-        razorpayPaymentId: payment.paymentId,
-        stockReserved: false,
-        reservationExpiresAt: null,
-        updatedAt: now,
-      },
-    },
-    { returnDocument: "after" },
-  );
-  if (!updated) {
-    const current = await db.collection<OrderDoc>("orders").findOne({ _id: order._id });
-    if (current?.paymentStatus === "paid") return current;
-    throw new InputError("Payment could not be recorded");
+  if (order.reconciliation?.paymentId === payment.paymentId) return reloadOrder(db, order._id);
+  if (holdIntact(order)) {
+    const confirmed = await confirmHeldOrder(db, order, payment);
+    if (confirmed) return confirmed;
   }
-  return updated;
+  const current = await reloadOrder(db, order._id);
+  if (current.paymentStatus === "paid" && current.razorpayPaymentId === payment.paymentId) return current;
+  if (current.reconciliation?.paymentId === payment.paymentId) return current;
+  return flagReconciliation(db, current, payment, "stock_released");
 }
 
 export async function markPaymentFailed(db: Db, razorpayOrderId: string, eventId: string) {
-  const recorded = await recordPaymentEvent(db, eventId, razorpayOrderId);
-  if (recorded === "duplicate") return;
+  await recordPaymentEvent(db, eventId, razorpayOrderId);
   const order = await db.collection<OrderDoc>("orders").findOne({ razorpayOrderId });
-  if (!order || order.paymentStatus === "paid" || order.paymentStatus === "refunded") return;
+  if (!order || order.paymentStatus === "paid" || order.paymentStatus === "refunded" || order.paymentStatus === "review") return;
+  if (order.reconciliation) return;
   if (order.status === "pending_payment") await releaseReservation(db, order._id, "failed");
 }
 
@@ -236,17 +238,44 @@ export async function fulfillOrder(db: Db, id: string) {
   return updated;
 }
 
-export async function releaseExpiredReservations(db: Db) {
-  await finishStockReleases(db);
-  const now = new Date();
-  const due = await db
-    .collection<OrderDoc>("orders")
-    .find({ status: "pending_payment", reservationExpiresAt: { $lte: now } })
-    .limit(20)
-    .toArray();
-  for (const order of due) {
-    await releaseReservation(db, order._id, "failed");
+export type ReservationExpiryResult = { examined: number; released: number; failed: number };
+
+export async function releaseExpiredReservations(db: Db): Promise<ReservationExpiryResult> {
+  const result: ReservationExpiryResult = { examined: 0, released: 0, failed: 0 };
+  const record = (finished: { completed: number; failed: number }) => {
+    result.released += finished.completed;
+    result.failed += finished.failed;
+  };
+  for (let batch = 0; batch < 10; batch += 1) {
+    record(await finishStockReleases(db));
+    const now = new Date();
+    const due = await db
+      .collection<OrderDoc>("orders")
+      .find({
+        status: "pending_payment",
+        reservationExpiresAt: { $lte: now },
+        paymentStatus: { $in: ["unpaid", "pending", "failed"] },
+        stockReleaseDue: { $ne: true },
+      })
+      .limit(20)
+      .toArray();
+    if (!due.length) return result;
+    result.examined += due.length;
+    let released = 0;
+    for (const order of due) {
+      try {
+        if (await releaseReservation(db, order._id, "failed")) {
+          released += 1;
+          result.released += 1;
+        }
+      } catch {
+        result.failed += 1;
+      }
+    }
+    if (released === 0 || due.length < 20) break;
   }
+  record(await finishStockReleases(db));
+  return result;
 }
 
 async function snapshotLines(db: Db, items: { productId: string; quantity: number }[]) {
@@ -300,27 +329,29 @@ async function reserveStock(db: Db, productId: ObjectId, quantity: number) {
 async function releaseReservation(db: Db, orderId: ObjectId, paymentStatus: "failed") {
   const now = new Date();
   const claimed = await db.collection<OrderDoc>("orders").findOneAndUpdate(
-    { _id: orderId, status: "pending_payment", stockReleaseDue: { $ne: true } },
+    {
+      _id: orderId,
+      status: "pending_payment",
+      paymentStatus: { $in: ["unpaid", "pending", "failed"] },
+      stockReleaseDue: { $ne: true },
+    },
     { $set: { stockReserved: false, stockReleaseDue: true, releaseLeaseUntil: new Date(now.getTime() + 60_000), updatedAt: now } },
     { returnDocument: "before" },
   );
-  if (!claimed) return;
+  if (!claimed) return false;
   assertOrderTransition(claimed.status, "cancelled");
-  assertPaymentTransition(claimed.paymentStatus, paymentStatus);
-  if (claimed.stockReserved) await restoreOrderStock(db, orderId);
-  await db.collection<OrderDoc>("orders").updateOne(
-    { _id: orderId, stockReleaseDue: true },
-    {
-      $set: {
-        status: "cancelled",
-        paymentStatus,
-        stockReleaseDue: false,
-        releaseLeaseUntil: null,
-        reservationExpiresAt: null,
-        updatedAt: new Date(),
-      },
-    },
-  );
+  if (claimed.paymentStatus !== "review") assertPaymentTransition(claimed.paymentStatus, paymentStatus);
+  try {
+    if (claimed.stockReserved) await restoreOrderStock(db, orderId);
+    await finishRelease(db, orderId);
+  } catch (error) {
+    await db.collection<OrderDoc>("orders").updateOne(
+      { _id: orderId, stockReleaseDue: true },
+      { $set: { releaseLeaseUntil: null } },
+    );
+    throw error;
+  }
+  return true;
 }
 
 async function finishStockReleases(db: Db) {
@@ -329,42 +360,114 @@ async function finishStockReleases(db: Db) {
     .collection<OrderDoc>("orders")
     .find({
       stockReleaseDue: true,
+      paymentStatus: { $ne: "paid" },
       $or: [{ releaseLeaseUntil: null }, { releaseLeaseUntil: { $lte: now } }],
     })
     .limit(20)
     .toArray();
+  let completed = 0;
+  let failed = 0;
   for (const order of due) {
-    const claimed = await db.collection<OrderDoc>("orders").findOneAndUpdate(
-      { _id: order._id, stockReleaseDue: true },
-      { $set: { releaseLeaseUntil: new Date(now.getTime() + 60_000) } },
-      { returnDocument: "before" },
-    );
-    if (!claimed?.stockReleaseDue) continue;
-    await restoreOrderStock(db, order._id);
-    await db.collection<OrderDoc>("orders").updateOne(
-      { _id: order._id, stockReleaseDue: true },
-      { $set: { stockReleaseDue: false, releaseLeaseUntil: null, status: "cancelled", paymentStatus: "failed", updatedAt: new Date() } },
-    );
+    try {
+      const claimed = await db.collection<OrderDoc>("orders").findOneAndUpdate(
+        {
+          _id: order._id,
+          stockReleaseDue: true,
+          paymentStatus: { $ne: "paid" },
+        },
+        { $set: { releaseLeaseUntil: new Date(now.getTime() + 60_000) } },
+        { returnDocument: "before" },
+      );
+      if (!claimed?.stockReleaseDue) continue;
+      await restoreOrderStock(db, order._id);
+      await finishRelease(db, order._id);
+      completed += 1;
+    } catch {
+      await db.collection<OrderDoc>("orders").updateOne(
+        { _id: order._id, stockReleaseDue: true },
+        { $set: { releaseLeaseUntil: null } },
+      );
+      failed += 1;
+    }
   }
+  return { completed, failed };
+}
+
+async function finishRelease(db: Db, orderId: ObjectId) {
+  await db.collection<OrderDoc>("orders").updateOne({ _id: orderId, stockReleaseDue: true }, [
+    {
+      $set: {
+        status: "cancelled",
+        paymentStatus: {
+          $cond: [{ $in: ["$paymentStatus", ["paid", "review", "refunded"]] }, "$paymentStatus", "failed"],
+        },
+        stockReleaseDue: false,
+        releaseLeaseUntil: null,
+        reservationExpiresAt: null,
+        updatedAt: new Date(),
+      },
+    },
+  ]);
 }
 
 async function restoreOrderStock(db: Db, orderId: ObjectId) {
   const order = await db.collection<OrderDoc>("orders").findOne({ _id: orderId });
   if (!order) return;
   for (let index = 0; index < order.items.length; index += 1) {
-    const claimed = await db.collection<OrderDoc>("orders").findOneAndUpdate(
+    const line = order.items[index];
+    if (!line?.reserved || line.restored) continue;
+    await restoreReservedLine(db, orderId, index, line);
+    await db.collection<OrderDoc>("orders").updateOne(
       { _id: orderId, [`items.${index}.reserved`]: true, [`items.${index}.restored`]: { $ne: true } },
       { $set: { [`items.${index}.restored`]: true, updatedAt: new Date() } },
-      { returnDocument: "before" },
     );
-    const line = claimed?.items[index];
-    if (!line?.reserved) continue;
-    await restoreLine(db, line);
   }
 }
 
 async function restoreLines(db: Db, lines: OrderItemDoc[]) {
   for (const line of lines) await restoreLine(db, line);
+}
+
+async function restoreReservedLine(db: Db, orderId: ObjectId, index: number, line: OrderItemDoc) {
+  if (!line.reserved || !Number.isInteger(line.quantity) || line.quantity < 1) {
+    throw new Error("Reserved stock could not be restored");
+  }
+  const releaseKey = `${orderId.toHexString()}:${index}`;
+  const now = new Date();
+  const result = await db.collection<ProductDoc>("products").updateOne({ _id: line.productId }, [
+    {
+      $set: {
+        stockQuantity: {
+          $cond: [
+            { $in: [releaseKey, { $ifNull: ["$appliedRestores", []] }] },
+            "$stockQuantity",
+            { $add: [{ $ifNull: ["$stockQuantity", 0] }, line.quantity] },
+          ],
+        },
+        stockStatus: {
+          $cond: [
+            { $in: [releaseKey, { $ifNull: ["$appliedRestores", []] }] },
+            "$stockStatus",
+            {
+              $cond: [
+                {
+                  $and: [
+                    { $eq: ["$stockStatus", "sold_out"] },
+                    { $gt: [{ $add: [{ $ifNull: ["$stockQuantity", 0] }, line.quantity] }, 0] },
+                  ],
+                },
+                "in_stock",
+                "$stockStatus",
+              ],
+            },
+          ],
+        },
+        appliedRestores: { $setUnion: [{ $ifNull: ["$appliedRestores", []] }, [releaseKey]] },
+        updatedAt: now,
+      },
+    },
+  ]);
+  if (result.matchedCount !== 1) throw new Error("Reserved stock could not be restored");
 }
 
 async function restoreLine(db: Db, line: OrderItemDoc) {
@@ -408,11 +511,103 @@ async function recordPaymentEvent(db: Db, eventId: string, reference: string) {
   }
 }
 
+function holdIntact(order: OrderDoc) {
+  if (order.status !== "pending_payment" || order.stockReleaseDue || order.reconciliation) return false;
+  if (order.paymentStatus !== "unpaid" && order.paymentStatus !== "pending") return false;
+  return !order.items.some((item) => item.reserved && item.restored);
+}
+
+async function confirmHeldOrder(db: Db, order: OrderDoc, payment: VerifiedPayment) {
+  const now = new Date();
+  return db.collection<OrderDoc>("orders").findOneAndUpdate(
+    {
+      _id: order._id,
+      status: "pending_payment",
+      paymentStatus: { $in: ["unpaid", "pending"] },
+      stockReleaseDue: { $ne: true },
+      reconciliation: null,
+      items: { $not: { $elemMatch: { reserved: true, restored: true } } },
+    },
+    {
+      $set: {
+        paymentStatus: "paid",
+        status: "confirmed",
+        razorpayPaymentId: payment.paymentId,
+        stockReserved: false,
+        reservationExpiresAt: null,
+        updatedAt: now,
+      },
+    },
+    { returnDocument: "after" },
+  );
+}
+
+async function flagReconciliation(db: Db, order: OrderDoc, payment: VerifiedPayment, reason: ReconciliationReason) {
+  const now = new Date();
+  const reconciliation = {
+    reason,
+    paymentId: payment.paymentId,
+    amountPaise: payment.amountPaise,
+    recordedAt: now,
+  };
+  if (reason === "conflicting_payment") {
+    const updated = await db.collection<OrderDoc>("orders").findOneAndUpdate(
+      { _id: order._id, reconciliation: null, razorpayPaymentId: { $ne: payment.paymentId } },
+      { $set: { reconciliation, updatedAt: now } },
+      { returnDocument: "after" },
+    );
+    return updated ?? reloadOrder(db, order._id);
+  }
+  const updated = await db.collection<OrderDoc>("orders").findOneAndUpdate(
+    {
+      _id: order._id,
+      paymentStatus: { $nin: ["paid", "refunded"] },
+      $or: [{ reconciliation: null }, { "reconciliation.paymentId": payment.paymentId }],
+    },
+    { $set: { paymentStatus: "review", reconciliation, updatedAt: now } },
+    { returnDocument: "after" },
+  );
+  if (updated) {
+    await db.collection<OrderDoc>("orders").updateOne(
+      { _id: order._id, razorpayPaymentId: null },
+      { $set: { razorpayPaymentId: payment.paymentId } },
+    );
+    return reloadOrder(db, order._id);
+  }
+  return reloadOrder(db, order._id);
+}
+
+async function recordUnmatchedCapture(db: Db, payment: VerifiedPayment) {
+  await db.collection("paymentReconciliations").updateOne(
+    { provider: "razorpay", razorpayOrderId: payment.razorpayOrderId, paymentId: payment.paymentId },
+    {
+      $setOnInsert: {
+        _id: new ObjectId(),
+        provider: "razorpay",
+        razorpayOrderId: payment.razorpayOrderId,
+        paymentId: payment.paymentId,
+        amountPaise: payment.amountPaise,
+        reason: "unknown_order",
+        eventId: payment.eventId,
+        createdAt: new Date(),
+      },
+    },
+    { upsert: true },
+  );
+}
+
+async function reloadOrder(db: Db, id: ObjectId) {
+  const order = await db.collection<OrderDoc>("orders").findOne({ _id: id });
+  if (!order) throw new InputError("Order not found", 404);
+  return order;
+}
+
 export function publicOrder(order: OrderDoc) {
   return {
     number: order.number,
     status: order.status,
     paymentStatus: order.paymentStatus,
+    reconciliationReason: order.reconciliation?.reason ?? null,
     currency: order.currency,
     subtotal: order.subtotal,
     shipping: order.shipping,

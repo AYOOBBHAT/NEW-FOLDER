@@ -6,8 +6,13 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   try {
     const { slug } = await params;
     const collection = await getPublishedCollection(slug);
-    if (!collection) return { title: "Collection" };
-    return { title: collection.name, description: collection.description };
+    if (!collection) return { title: "Collection", robots: { index: false, follow: false } };
+    return {
+      title: collection.name,
+      description: collection.description,
+      alternates: { canonical: `/collections/${slug}` },
+      robots: { index: true, follow: true },
+    };
   } catch {
     return { title: "Collection" };
   }

@@ -52,6 +52,7 @@ const productSchema = new Schema(
     verifiedOrigin: { type: String, default: null },
     stockStatus: { type: String, enum: STOCK_STATUS_VALUES, required: true },
     stockQuantity: { type: Number, default: null },
+    appliedRestores: { type: [String], default: [] },
     categoryIds: { type: [Schema.Types.ObjectId], default: [] },
     collectionIds: { type: [Schema.Types.ObjectId], default: [] },
     featured: { type: Boolean, default: false },
@@ -111,6 +112,18 @@ const orderSchema = new Schema(
     reservationExpiresAt: { type: Date, default: null },
     razorpayOrderId: { type: String, default: null },
     razorpayPaymentId: { type: String, default: null },
+    reconciliation: {
+      type: new Schema(
+        {
+          reason: { type: String, enum: ["stock_released", "amount_mismatch", "conflicting_payment"], required: true },
+          paymentId: { type: String, required: true },
+          amountPaise: { type: Number, required: true, min: 0 },
+          recordedAt: { type: Date, required: true },
+        },
+        { _id: false },
+      ),
+      default: null,
+    },
   },
   { collection: "orders", timestamps: true, strict: true },
 );

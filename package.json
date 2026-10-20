@@ -6,7 +6,7 @@
     "build": "next build",
     "start": "next start",
     "seed": "tsx scripts/seed.ts",
-    "test": "tsx --test tests/catalogue-params.test.ts tests/validators.test.ts tests/catalogue-query.test.ts tests/persistence.test.ts tests/checkout.test.ts",
+    "test": "tsx --test tests/catalogue-params.test.ts tests/validators.test.ts tests/catalogue-query.test.ts tests/persistence.test.ts tests/checkout.test.ts tests/reservations.test.ts tests/cron-auth.test.ts tests/deploy-readiness.test.ts",
     "check:db": "tsx scripts/check-atlas.ts",
     "check:images": "tsx scripts/check-cloudinary.ts",
     "dev:memory": "tsx scripts/dev-memory.ts"

@@ -1,5 +1,11 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { getPublishedTaxonomy } from "@/lib/storefront";
+
+export const metadata: Metadata = {
+  alternates: { canonical: "/" },
+  robots: { index: true, follow: true },
+};
 
 export default async function HomePage() {
   let taxonomy: Awaited<ReturnType<typeof getPublishedTaxonomy>> | null = null;

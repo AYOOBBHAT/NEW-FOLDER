@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { site } from "@/lib/site";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -25,7 +26,7 @@ export function SiteHeader({ categories, collections }: { categories: NavItem[];
     <header className="site-header">
       <div className="wrap header-inner">
         <Link href="/" className="wordmark">
-          Shawl House
+          {site.name}
           <small>Kashmiri shawls</small>
         </Link>
         <nav className="desktop-nav" aria-label="Catalogue">

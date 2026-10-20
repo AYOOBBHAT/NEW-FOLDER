@@ -28,6 +28,7 @@ export async function POST(request: Request, context: Context) {
     });
     if (!proof) return json({ error: "Payment was not verified" }, 400);
     const paid = await applyVerifiedPayment(db, hashGuestToken(token), proof);
+    if (!paid) return json({ error: "Payment was not verified" }, 400);
     return json({ order: publicOrder(paid) });
   });
 }

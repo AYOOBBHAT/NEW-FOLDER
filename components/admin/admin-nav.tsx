@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { site } from "@/lib/site";
 import { usePathname } from "next/navigation";
 import { SignOutButton } from "@/components/admin/sign-out";
 
@@ -17,7 +18,7 @@ export function AdminNav() {
   return (
     <aside className="admin-nav">
       <Link href="/admin" className="wordmark">
-        Shawl House
+        {site.name}
         <small>Catalogue admin</small>
       </Link>
       <nav aria-label="Admin">

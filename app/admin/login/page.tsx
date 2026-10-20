@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { site } from "@/lib/site";
 import { LoginForm } from "@/components/admin/login-form";
 import { getAdminSession } from "@/lib/current-admin";
 import { isAdminConfigured } from "@/lib/session";
@@ -10,7 +11,7 @@ export default async function LoginPage() {
   if (session) redirect("/admin");
   return (
     <main className="login-card" id="content">
-      <p className="eyebrow">Shawl House</p>
+      <p className="eyebrow">{site.name}</p>
       <h1>Admin</h1>
       {isAdminConfigured() ? (
         <LoginForm />

@@ -9,6 +9,8 @@ import { razorpayStatus } from "@/lib/razorpay";
 
 export const dynamic = "force-dynamic";
 
+export const metadata = { robots: { index: false, follow: false } };
+
 const ORDER_LABELS = {
   pending_payment: "Awaiting payment",
   confirmed: "Confirmed",
@@ -21,6 +23,7 @@ const PAYMENT_LABELS = {
   pending: "Payment started",
   paid: "Paid",
   failed: "Payment failed",
+  review: "Payment needs review",
   refunded: "Refunded",
 } as const;
 
@@ -38,7 +41,10 @@ export default async function OrderPage({ params }: { params: Promise<{ number: 
         <p className="eyebrow">Order {order.number}</p>
         <h1>{ORDER_LABELS[order.status]}</h1>
         <p className="detail-kicker">{PAYMENT_LABELS[order.paymentStatus]}</p>
-        {order.paymentStatus !== "paid" ? (
+        {order.reconciliation ? (
+          <p className="help">Payment was received, but this order cannot be confirmed from the reserved stock. The shop has to review it before anything else is sent.</p>
+        ) : null}
+        {order.paymentStatus !== "paid" && order.paymentStatus !== "review" ? (
           <p className="help">
             {payments.enabled
               ? "Razorpay must confirm the payment before this order is marked paid."

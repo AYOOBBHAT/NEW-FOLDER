@@ -22,11 +22,12 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     const { slug } = await params;
     const session = await getAdminSession();
     const product = await getPublicProduct(slug, Boolean(session));
-    if (!product || (!product.published && !session)) return { title: "Piece" };
+    if (!product || (!product.published && !session)) return { title: "Piece", robots: { index: false, follow: false } };
     return {
       title: product.name,
       description: product.summary || undefined,
-      robots: product.published ? undefined : { index: false, follow: false },
+      alternates: { canonical: `/products/${slug}` },
+      robots: product.published ? { index: true, follow: true } : { index: false, follow: false },
     };
   } catch {
     return { title: "Piece" };
